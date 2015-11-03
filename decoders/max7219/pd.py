@@ -70,7 +70,7 @@ class Decoder(srd.Decoder):
         self.put(ss, es, self.out_ann, [self.ann_reg, ['%s: %s' % (reg, value)]])
 
     def putdigit(self, ss, es, digit, value):
-        self.put(ss, es, self.out_ann, [self.ann_reg, ['Digit %d: %02x' % (digit, value)]])
+        self.put(ss, es, self.out_ann, [self.ann_reg, ['Digit %d: %02X' % (digit, value)]])
 
     def putwarn(self, ss, es, message):
         self.put(ss, es, self.out_ann, [self.ann_warning, [message]])

@@ -48,7 +48,6 @@ class Decoder(srd.Decoder):
     license = 'gplv2+'
     inputs = ['spi']
     outputs = ['max7219']
-    # TODO: channels
     annotations = (
         ('register', 'Registers written to the device'),
         ('digit', 'Digits displayed on the device'),

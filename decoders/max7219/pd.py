@@ -24,19 +24,19 @@ import sigrokdecode as srd
 def _decode_intensity(val):
     intensity = val & 0x0f
     if intensity == 0:
-        return "min"
+        return 'min'
     elif intensity == 15:
-        return "max"
+        return 'max'
     else:
         return intensity
 
 registers = {
-    0x00: ['No-op', lambda _: ""],
-    0x09: ['Decode', lambda v: "0b{:08b}".format(v)],
+    0x00: ['No-op', lambda _: ''],
+    0x09: ['Decode', lambda v: '0b{:08b}'.format(v)],
     0x0A: ['Intensity', _decode_intensity],
     0x0B: ['Scan limit', lambda v: 1 + v],
-    0x0C: ['Shutdown', lambda v: "off" if v else "on"],
-    0x0F: ['Display test', lambda v: "on" if v else "off"]
+    0x0C: ['Shutdown', lambda v: 'off' if v else 'on'],
+    0x0F: ['Display test', lambda v: 'on' if v else 'off']
 }
 
 class Decoder(srd.Decoder):

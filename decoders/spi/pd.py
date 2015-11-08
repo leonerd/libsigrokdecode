@@ -276,7 +276,7 @@ class Decoder(srd.Decoder):
                 self.mosibytes = []
             else:
                 self.put(self.transfer_ss, self.samplenum, self.out_python,
-                    ['TRANSFER', self.misobytes, self.mosibytes])
+                    ['TRANSFER', self.mosibytes, self.misobytes])
 
             # Reset decoder state when CS# changes (and the CS# pin is used).
             self.reset_decoder_state()

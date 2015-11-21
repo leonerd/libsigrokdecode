@@ -22,7 +22,7 @@
 import sigrokdecode as srd
 from collections import namedtuple
 
-Byte = namedtuple('Byte', ['ss', 'es', 'val'])
+Data = namedtuple('Data', ['ss', 'es', 'val'])
 
 '''
 OUTPUT_PYTHON format:
@@ -41,8 +41,8 @@ Packet:
    Both data items are Python numbers (0/1), not strings. At the beginning of
    the decoding a packet is generated with <data1> = None and <data2> being the
    initial state of the CS# pin or None if the chip select pin is not supplied.
- - 'TRANSFER': <data1>/<data2> contain a list of Byte() namedtuples for each
-   byte transferred during this block of CS# asserted time. Each Byte() has
+ - 'TRANSFER': <data1>/<data2> contain a list of Data() namedtuples for each
+   byte transferred during this block of CS# asserted time. Each Data() has
    fields ss, es, and val.
 
 Examples:
@@ -57,8 +57,8 @@ Examples:
  ['DATA', 0xa8, None]
  ['DATA', None, 0x55]
  ['CS-CHANGE', 0, 1]
- ['TRANSFER', [Byte(ss=80, es=96, val=0xff), ...],
-              [Byte(ss=80, es=96, val=0x3a), ...]]
+ ['TRANSFER', [Data(ss=80, es=96, val=0xff), ...],
+              [Data(ss=80, es=96, val=0x3a), ...]]
 '''
 
 # Key: (CPOL, CPHA). Value: SPI mode.
@@ -174,9 +174,9 @@ class Decoder(srd.Decoder):
         self.put(ss, es, self.out_python, ['DATA', si, so])
 
         if self.have_miso:
-            self.misobytes.append(Byte(ss=ss, es=es, val=so))
+            self.misobytes.append(Data(ss=ss, es=es, val=so))
         if self.have_mosi:
-            self.mosibytes.append(Byte(ss=ss, es=es, val=si))
+            self.mosibytes.append(Data(ss=ss, es=es, val=si))
 
         # Bit annotations.
         if self.have_miso:

@@ -135,7 +135,7 @@ class Decoder(srd.Decoder):
         self.mosibytes = []
         self.ss_block = -1
         self.samplenum = -1
-        self.transfer_ss = -1
+        self.ss_transfer = -1
         self.cs_was_deasserted = False
         self.oldcs = None
         self.oldpins = None
@@ -271,11 +271,11 @@ class Decoder(srd.Decoder):
             self.oldcs = cs
 
             if self.cs_asserted(cs):
-                self.transfer_ss = self.samplenum
+                self.ss_transfer = self.samplenum
                 self.misobytes = []
                 self.mosibytes = []
             else:
-                self.put(self.transfer_ss, self.samplenum, self.out_python,
+                self.put(self.ss_transfer, self.samplenum, self.out_python,
                     ['TRANSFER', self.mosibytes, self.misobytes])
 
             # Reset decoder state when CS# changes (and the CS# pin is used).

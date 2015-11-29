@@ -61,7 +61,7 @@ class Decoder(srd.Decoder):
 
     def putv(self, ss, es, name, val):
         self.put(ss, es, self.out_ann, [ann_value,
-            ['%s: %02X' % (name, val)]])
+            ['%s: %s' % (name, val)]])
 
     def putwarn(self, ss, es, msg):
         self.put(ss, es, self.out_ann, [ann_warning, [msg]])
@@ -101,11 +101,25 @@ class Decoder(srd.Decoder):
         while values:
             value = values.pop(0)
 
-            if addr in registers:
-                name = registers[addr]
-                self.putv(value.ss, value.es, name, value.val)
-            else:
+            if addr not in registers:
                 self.putwarn(value.ss, value.es,
                     msg='Unknown register %02X' % addr)
+                addr += 1
+                continue
 
-            addr += 1
+            name = registers[addr]
+
+            # Try to merge 16bit transfers into singles
+            if addr % 2 == 0 and len(values):
+                value_hi = values.pop(0)
+                val = value.val | (value_hi.val << 8)
+
+                self.putv(value.ss, value_hi.es, name[:-1],
+                    '%04X' % val)
+
+                addr += 2
+            else:
+                self.putv(value.ss, value.es, name,
+                    '%02X' % value.val)
+
+                addr += 1

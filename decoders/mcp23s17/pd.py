@@ -53,11 +53,11 @@ class Decoder(srd.Decoder):
 
     def putselect(self, ss, es, slave, direction):
         self.put(ss, es, self.out_ann, [ann_select,
-            ['Select %02X for %s' % (slave, direction)]])
+            ['%s %02X' % (direction[0].upper() + direction[1:], slave)]])
 
     def putaddr(self, ss, es, addr):
         self.put(ss, es, self.out_ann, [ann_addr,
-            ['Address %02X' % addr]])
+            ['Addr %02X' % addr]])
 
     def putv(self, ss, es, name, val):
         self.put(ss, es, self.out_ann, [ann_value,

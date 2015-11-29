@@ -51,6 +51,21 @@ class Decoder(srd.Decoder):
     def start(self):
         self.out_ann = self.register(srd.OUTPUT_ANN)
 
+    def putselect(self, ss, es, slave, direction):
+        self.put(ss, es, self.out_ann, [ann_select,
+            ['Select %02X for %s' % (slave, direction)]])
+
+    def putaddr(self, ss, es, addr):
+        self.put(ss, es, self.out_ann, [ann_addr,
+            ['Address %02X' % addr]])
+
+    def putv(self, ss, es, name, val):
+        self.put(ss, es, self.out_ann, [ann_value,
+            ['%s: %02X' % (name, val)]])
+
+    def putwarn(self, ss, es, msg):
+        self.put(ss, es, self.out_ann, [ann_warning, [msg]])
+
     def decode(self, ss, es, data):
         if data[0] != 'TRANSFER':
             return
@@ -66,16 +81,14 @@ class Decoder(srd.Decoder):
         slave = slavesel >> 1
         direction = 'read' if slavesel & 1 else 'write'
 
-        self.put(mosi[0].ss, mosi[0].es, self.out_ann,
-            [ann_select, ['Select %02X for %s' % (slave, direction)]])
+        self.putselect(mosi[0].ss, mosi[0].es, slave, direction)
 
         if len(mosi) < 2:
             return
 
         addr = mosi[1].val
 
-        self.put(mosi[1].ss, mosi[1].es, self.out_ann,
-            [ann_addr, ['Address %02X' % addr]])
+        self.putaddr(mosi[1].ss, mosi[1].es, addr)
 
         if direction == 'read':
             values = miso
@@ -90,10 +103,9 @@ class Decoder(srd.Decoder):
 
             if addr in registers:
                 name = registers[addr]
-                self.put(value.ss, value.es, self.out_ann,
-                    [ann_value, ['%s: %02X' % (name, value.val)]])
+                self.putv(value.ss, value.es, name, value.val)
             else:
-                self.put(value.ss, value.es, self.out_ann,
-                    [ann_warning, ['Unknown register %02X' % addr]])
+                self.putwarn(value.ss, value.es,
+                    msg='Unknown register %02X' % addr)
 
             addr += 1

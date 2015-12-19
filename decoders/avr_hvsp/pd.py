@@ -24,7 +24,8 @@ SII_BITNAME = (
     '', '', 'XA1', 'XA0', 'BS1', 'WR#', 'OE#', 'BS2', 'PAGEL',
 )
 
-ann_sii_bits, ann_sdi_bits, ann_sdo_bits, ann_sii, ann_sdi, ann_sdo = range(6)
+(ann_sii_bits, ann_sdi_bits, ann_sdo_bits, ann_sii, ann_sdi, ann_sdo,
+    ann_instr, ann_warn) = range(8)
 
 class Decoder(srd.Decoder):
     api_version = 2
@@ -48,6 +49,8 @@ class Decoder(srd.Decoder):
         ('sii', 'SII'),
         ('sdi', 'SDI'),
         ('sdo', 'SDO'),
+        ('instr', 'Instructions'),
+        ('warnings', 'Warnings'),
     )
     annotation_rows = (
         ('sii-bits', 'SII bits', (ann_sii_bits,)),
@@ -56,6 +59,8 @@ class Decoder(srd.Decoder):
         ('sii', 'SII', (ann_sii,)),
         ('sdi', 'SDI', (ann_sdi,)),
         ('sdo', 'SDO', (ann_sdo,)),
+        ('instr', 'Instructions', (ann_instr,)),
+        ('warnings', 'Warnings', (ann_warn,)),
     )
 
     def start(self):
@@ -66,6 +71,10 @@ class Decoder(srd.Decoder):
         self.bitnum = None
         self.bit_hightime = None
         self.bit_lowtime = None
+
+        self.cur_cmd = 0
+        self.cur_addr = 0
+        self.cur_val = 0
 
     def putbit(self, ss, es, ann, val, name=None):
         if name is None:
@@ -79,12 +88,89 @@ class Decoder(srd.Decoder):
     def putx(self, ss, es, ann, val):
         self.put(ss, es, self.out_ann, [ann, ["%02X" % val]])
 
+    def puti(self, ss, es, val):
+        self.put(ss, es, self.out_ann, [ann_instr, [val]])
+
+    def putwarn(self, ss, es, warning):
+        self.put(ss, es, self.out_ann, [ann_warn, [warning]])
+
+    def do_load_addr(self, ss, es, bs, sdi):
+        if bs == 0:
+            self.puti(ss, es, "LLA %02X" % sdi)
+            self.cur_addr = (self.cur_addr & 0xFF00) | sdi
+        elif bs == 1:
+            self.puti(ss, es, "LHA %02X" % sdi)
+            self.cur_addr = (sdi << 8) | (self.cur_addr & 0x00FF)
+        else:
+            self.putwarn(ss, es, "LA invalid BS=%d" % bs)
+
+    def do_load_data(self, ss, es, bs, sdi):
+        if bs == 0:
+            self.puti(ss, es, "LLD %02X" % sdi)
+            self.cur_val = (self.cur_val & 0xFF00) | sdi
+        elif bs == 1:
+            self.puti(ss, es, "LHD %02X" % sdi)
+            self.cur_val = (sdi << 8) | (self.cur_val & 0x00FF)
+
+    def do_load_command(self, ss, es, sdi):
+        # TODO: decode command name
+        self.puti(ss, es, "CMD %02X" % sdi)
+        self.cur_cmd = sdi
+
+    def do_word(self, ss, es, sii, sdi):
+        # The SII bits map to hardware control lines in an interesting manner
+        # 6   5   4   3   2   1   0
+        # XA1 XA0 BS1 WR# OE# BS2 PAGEL
+        xa = (sii & 0x60) >> 5;
+        bs = (sii & 0x10) >> 4 | (sii & 0x02)
+        wr = not (sii & 0x08)
+        oe = not (sii & 0x04)
+        pagel = (sii & 0x01)
+
+        # WR, OE and PAGEL are only allowed if XA==3
+        if xa != 3:
+            if wr:
+                self.putwarn(ss, es, "Invalid WR")
+                return
+            if oe:
+                self.putwarn(ss, es, "Invalid OE")
+                return
+            if pagel:
+                self.putwarn(ss, es, "Invalid PAGEL")
+                return
+
+        # At most one of wr, oe and pagel are allowed
+        if wr and oe:
+            self.putwarn(ss, es, "Invalid WR+OE")
+            return
+        if wr and pagel:
+            self.putwarn(ss, es, "Invalid WR+PAGEL")
+            return
+        if oe and pagel:
+            self.putwarn(ss, es, "Invalid OE+PAGEL")
+            return
+
+        if xa == 0:
+            self.do_load_addr(ss, es, bs, sdi)
+        elif xa == 1:
+            self.do_load_data(ss, es, bs, sdi)
+        elif xa == 2:
+            if bs != 0:
+                self.putwarn(ss, es, "Invalid BS")
+            else:
+                self.do_load_command(ss, es, sdi)
+        else:
+            self.putwarn(ss, es, "TODO: XA=3")
+
     def sci_rise(self, pins, samplenum, bitnum):
         # SII / SDI are clocked on rising edge
         self.sii, self.sdi, _ = pins
 
         self.bit_old_hightime = self.bit_hightime
         self.bit_hightime = samplenum
+
+        if bitnum == 0:
+            self.word_ss = samplenum
 
         # Only bits 1 to 8 are interesting
         if bitnum < 1 or bitnum > 8:
@@ -109,6 +195,10 @@ class Decoder(srd.Decoder):
 
         self.bit_old_lowtime = self.bit_lowtime
         self.bit_lowtime = samplenum
+
+        if bitnum == 10:
+            self.do_word(self.word_ss, samplenum,
+                self.sii_word, self.sdi_word)
 
         # Only bits 1 to 8 are interesting
         if bitnum < 1 or bitnum > 8:

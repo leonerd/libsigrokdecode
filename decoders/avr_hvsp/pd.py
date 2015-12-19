@@ -20,6 +20,10 @@
 
 import sigrokdecode as srd
 
+SII_BITNAME = (
+    '', '', 'XA1', 'XA0', 'BS1', 'WR#', 'OE#', 'BS2', 'PAGEL',
+)
+
 ann_sii_bits, ann_sdi_bits, ann_sdo_bits, ann_sii, ann_sdi, ann_sdo = range(6)
 
 class Decoder(srd.Decoder):
@@ -63,8 +67,14 @@ class Decoder(srd.Decoder):
         self.bit_hightime = None
         self.bit_lowtime = None
 
-    def putbit(self, ss, es, ann, val):
-        self.put(ss, es, self.out_ann, [ann, ["%d" % val]])
+    def putbit(self, ss, es, ann, val, name=None):
+        if name is None:
+            self.put(ss, es, self.out_ann, [ann, ["%d" % val]])
+            return
+        if name.endswith('#'):
+            val = not val
+            name = name[:-1]
+        self.put(ss, es, self.out_ann, [ann, [name if val else ' ']])
 
     def putx(self, ss, es, ann, val):
         self.put(ss, es, self.out_ann, [ann, ["%02X" % val]])
@@ -105,8 +115,9 @@ class Decoder(srd.Decoder):
             return
 
         # We now have the extent of the SII/SDI bit
-        self.putbit(self.bit_old_lowtime, samplenum,
-            ann_sii_bits, self.sii)
+        if bitnum > 1:
+            self.putbit(self.bit_old_lowtime, samplenum,
+                ann_sii_bits, self.sii, name=SII_BITNAME[bitnum])
         self.putbit(self.bit_old_lowtime, samplenum,
             ann_sdi_bits, self.sdi)
 

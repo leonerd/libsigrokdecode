@@ -18,11 +18,27 @@
 ## Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
 ##
 
+from collections import namedtuple
+
 import sigrokdecode as srd
 
 SII_BITNAME = (
     '', '', 'XA1', 'XA0', 'BS1', 'WR#', 'OE#', 'BS2', 'PAGEL',
 )
+
+Command = namedtuple('Command', ['name'])
+
+COMMANDS = {
+    0x80: Command('CE'),
+    0x40: Command('WFUSE'),
+    0x20: Command('WLOCK'),
+    0x10: Command('WFLASH'),
+    0x11: Command('WEEP'),
+    0x08: Command('RSIG'),   # Also ROSC
+    0x04: Command('RFUSE'),  # Also RLOCK
+    0x02: Command('RFLASH'),
+    0x03: Command('REEP'),
+}
 
 (ann_sii_bits, ann_sdi_bits, ann_sdo_bits, ann_sii, ann_sdi, ann_sdo,
     ann_instr, ann_warn) = range(8)
@@ -113,9 +129,13 @@ class Decoder(srd.Decoder):
             self.cur_val = (sdi << 8) | (self.cur_val & 0x00FF)
 
     def do_load_command(self, ss, es, sdi):
-        # TODO: decode command name
-        self.puti(ss, es, "CMD %02X" % sdi)
-        self.cur_cmd = sdi
+        if sdi not in COMMANDS:
+            self.putwarn("CMD unknown")
+            self.cur_cmd = None
+            return
+
+        self.cur_cmd = COMMANDS[sdi]
+        self.puti(ss, es, "CMD %s" % self.cur_cmd.name)
 
     def do_word(self, ss, es, sii, sdi):
         # The SII bits map to hardware control lines in an interesting manner

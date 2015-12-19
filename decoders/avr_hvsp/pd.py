@@ -69,7 +69,7 @@ class Decoder(srd.Decoder):
     def putx(self, ss, es, ann, val):
         self.put(ss, es, self.out_ann, [ann, ["%02X" % val]])
 
-    def sci_rise(self, pins, samplenum):
+    def sci_rise(self, pins, samplenum, bitnum):
         # SII / SDI are clocked on rising edge
         self.sii, self.sdi, _ = pins
 
@@ -77,23 +77,23 @@ class Decoder(srd.Decoder):
         self.bit_hightime = samplenum
 
         # Only bits 1 to 8 are interesting
-        if self.bitnum < 1 or self.bitnum > 8:
+        if bitnum < 1 or bitnum > 8:
             return
 
         # Now we have the extent of the SDO bit
         self.putbit(self.bit_old_hightime, samplenum,
             ann_sdo_bits, self.sdo)
 
-        if self.bitnum == 1:
+        if bitnum == 1:
             self.word_out_ss = self.bit_old_hightime
             self.sdo_word = 0
 
         self.sdo_word = (self.sdo_word << 1) | self.sdo
 
-        if self.bitnum == 8:
+        if bitnum == 8:
             self.putx(self.word_out_ss, samplenum, ann_sdo, self.sdo_word)
 
-    def sci_fall(self, pins, samplenum):
+    def sci_fall(self, pins, samplenum, bitnum):
         # SDO is clocked on falling edge
         _, _, self.sdo = pins
 
@@ -101,7 +101,7 @@ class Decoder(srd.Decoder):
         self.bit_lowtime = samplenum
 
         # Only bits 1 to 8 are interesting
-        if self.bitnum < 1 or self.bitnum > 8:
+        if bitnum < 1 or bitnum > 8:
             return
 
         # We now have the extent of the SII/SDI bit
@@ -110,7 +110,7 @@ class Decoder(srd.Decoder):
         self.putbit(self.bit_old_lowtime, samplenum,
             ann_sdi_bits, self.sdi)
 
-        if self.bitnum == 1:
+        if bitnum == 1:
             self.word_in_ss = self.bit_old_lowtime
             self.sii_word = 0
             self.sdi_word = 0
@@ -118,7 +118,7 @@ class Decoder(srd.Decoder):
         self.sii_word = (self.sii_word << 1) | self.sii
         self.sdi_word = (self.sdi_word << 1) | self.sdi
 
-        if self.bitnum == 8:
+        if bitnum == 8:
             self.putx(self.word_in_ss, samplenum, ann_sii, self.sii_word)
             self.putx(self.word_in_ss, samplenum, ann_sdi, self.sdi_word)
 
@@ -144,6 +144,6 @@ class Decoder(srd.Decoder):
                 if self.bitnum > 10:
                     self.bitnum = 0;
 
-                self.sci_rise((sii, sdi, sdo), samplenum)
+                self.sci_rise((sii, sdi, sdo), samplenum, self.bitnum)
             else:
-                self.sci_fall((sii, sdi, sdo), samplenum)
+                self.sci_fall((sii, sdi, sdo), samplenum, self.bitnum)

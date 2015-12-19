@@ -69,13 +69,6 @@ class Decoder(srd.Decoder):
     def putx(self, ss, es, ann, val):
         self.put(ss, es, self.out_ann, [ann, ["%02X" % val]])
 
-    def word_in(self, ss, es, sii, sdi):
-        self.putx(ss, es, ann_sii, sii)
-        self.putx(ss, es, ann_sdi, sdi)
-
-    def word_out(self, ss, es, sdo):
-        self.putx(ss, es, ann_sdo, sdo)
-
     def sci_rise(self, pins, samplenum):
         # SII / SDI are clocked on rising edge
         self.sii, self.sdi, _ = pins
@@ -98,7 +91,7 @@ class Decoder(srd.Decoder):
         self.sdo_word = (self.sdo_word << 1) | self.sdo
 
         if self.bitnum == 8:
-            self.word_out(self.word_out_ss, samplenum, self.sdo_word)
+            self.putx(self.word_out_ss, samplenum, ann_sdo, self.sdo_word)
 
     def sci_fall(self, pins, samplenum):
         # SDO is clocked on falling edge
@@ -126,8 +119,8 @@ class Decoder(srd.Decoder):
         self.sdi_word = (self.sdi_word << 1) | self.sdi
 
         if self.bitnum == 8:
-            self.word_in(self.word_in_ss, samplenum,
-                self.sii_word, self.sdi_word)
+            self.putx(self.word_in_ss, samplenum, ann_sii, self.sii_word)
+            self.putx(self.word_in_ss, samplenum, ann_sdi, self.sdi_word)
 
     def decode(self, ss, es, data):
         for samplenum, pins in data:

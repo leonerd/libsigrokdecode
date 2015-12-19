@@ -41,11 +41,17 @@ class Decoder(srd.Decoder):
         ('sii-bits', 'SII bits'),
         ('sdi-bits', 'SDI bits'),
         ('sdo-bits', 'SDO bits'),
+        ('sii', 'SII'),
+        ('sdi', 'SDI'),
+        ('sdo', 'SDO'),
     )
     annotation_rows = (
         ('sii-bits', 'SII bits', (ann_sii_bits,)),
         ('sdi-bits', 'SDI bits', (ann_sdi_bits,)),
         ('sdo-bits', 'SDO bits', (ann_sdo_bits,)),
+        ('sii', 'SII', (ann_sii,)),
+        ('sdi', 'SDI', (ann_sdi,)),
+        ('sdo', 'SDO', (ann_sdo,)),
     )
 
     def start(self):
@@ -59,6 +65,16 @@ class Decoder(srd.Decoder):
 
     def putbit(self, ss, es, ann, val):
         self.put(ss, es, self.out_ann, [ann, ["%d" % val]])
+
+    def putx(self, ss, es, ann, val):
+        self.put(ss, es, self.out_ann, [ann, ["%02X" % val]])
+
+    def word_in(self, ss, es, sii, sdi):
+        self.putx(ss, es, ann_sii, sii)
+        self.putx(ss, es, ann_sdi, sdi)
+
+    def word_out(self, ss, es, sdo):
+        self.putx(ss, es, ann_sdo, sdo)
 
     def sci_rise(self, pins, samplenum):
         # SII / SDI are clocked on rising edge
@@ -74,6 +90,15 @@ class Decoder(srd.Decoder):
         # Now we have the extent of the SDO bit
         self.putbit(self.bit_old_hightime, samplenum,
             ann_sdo_bits, self.sdo)
+
+        if self.bitnum == 1:
+            self.word_out_ss = self.bit_old_hightime
+            self.sdo_word = 0
+
+        self.sdo_word = (self.sdo_word << 1) | self.sdo
+
+        if self.bitnum == 8:
+            self.word_out(self.word_out_ss, samplenum, self.sdo_word)
 
     def sci_fall(self, pins, samplenum):
         # SDO is clocked on falling edge
@@ -91,6 +116,18 @@ class Decoder(srd.Decoder):
             ann_sii_bits, self.sii)
         self.putbit(self.bit_old_lowtime, samplenum,
             ann_sdi_bits, self.sdi)
+
+        if self.bitnum == 1:
+            self.word_in_ss = self.bit_old_lowtime
+            self.sii_word = 0
+            self.sdi_word = 0
+
+        self.sii_word = (self.sii_word << 1) | self.sii
+        self.sdi_word = (self.sdi_word << 1) | self.sdi
+
+        if self.bitnum == 8:
+            self.word_in(self.word_in_ss, samplenum,
+                self.sii_word, self.sdi_word)
 
     def decode(self, ss, es, data):
         for samplenum, pins in data:

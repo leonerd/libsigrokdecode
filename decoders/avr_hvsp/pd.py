@@ -130,7 +130,7 @@ class Decoder(srd.Decoder):
 
     def do_load_command(self, ss, es, sdi):
         if sdi not in COMMANDS:
-            self.putwarn("CMD unknown")
+            self.putwarn(ss, es, "CMD unknown")
             self.cur_cmd = None
             return
 

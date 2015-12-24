@@ -26,18 +26,20 @@ SII_BITNAME = (
     '', '', 'XA1', 'XA0', 'BS1', 'WR#', 'OE#', 'BS2', 'PAGEL',
 )
 
-Command = namedtuple('Command', ['name'])
+Command = namedtuple('Command', ['name', 'inst_by_bs'])
 
 COMMANDS = {
-    0x80: Command('CE'),
-    0x40: Command('WFUSE'),
-    0x20: Command('WLOCK'),
-    0x10: Command('WFLASH'),
-    0x11: Command('WEEP'),
-    0x08: Command('RSIG'),   # Also ROSC
-    0x04: Command('RFUSE'),  # Also RLOCK
-    0x02: Command('RFLASH'),
-    0x03: Command('REEP'),
+    0x80: Command('CE', ['CE', None, None, None]),
+
+    0x40: Command('WFUSE',  ['WFU0', 'WFU1', 'WFU2', None]),
+    0x20: Command('WLOCK',  ['WLOCK', None, None, None]),
+    0x10: Command('WFLASH', ['WLB', 'WHB']),
+    0x11: Command('WEEP',   ['WEEP', None, None, None]),
+
+    0x08: Command('RSIG',   ['RSIG', 'ROSC', None, None]),
+    0x04: Command('RFUSE',  ['RFU0', 'RLOCK', 'RFU2', 'RFU1']),
+    0x02: Command('RFLASH', ['RLB', 'RHB', None, None]),
+    0x03: Command('REEP',   ['REEP', None, None, None]),
 }
 
 (ann_sii_bits, ann_sdi_bits, ann_sdo_bits, ann_sii, ann_sdi, ann_sdo,
@@ -137,6 +139,24 @@ class Decoder(srd.Decoder):
         self.cur_cmd = COMMANDS[sdi]
         self.puti(ss, es, "CMD %s" % self.cur_cmd.name)
 
+    def do_write_enable(self, ss, es, bs, cmd):
+        # BS and CMD together suggest what the write command is
+        inst = cmd.inst_by_bs[bs]
+        if inst is None:
+            self.putwarn(ss, es, '%s invalid BS=%d' % (cmd.name, bs))
+            return
+
+        self.puti(ss, es, inst)
+
+    def do_output_enable(self, ss, es, bs, cmd):
+        # BS and CMD together suggest what the read command is
+        inst = cmd.inst_by_bs[bs]
+        if inst is None:
+            self.putwarn(ss, es, '%s invalid BS=%d' % (cmd.name, bs))
+            return
+
+        self.puti(ss, es, inst)
+
     def do_word(self, ss, es, sii, sdi):
         # The SII bits map to hardware control lines in an interesting manner
         # 6   5   4   3   2   1   0
@@ -179,8 +199,15 @@ class Decoder(srd.Decoder):
                 self.putwarn(ss, es, "Invalid BS")
             else:
                 self.do_load_command(ss, es, sdi)
+        # else xa==3
+        elif wr:
+            self.do_write_enable(ss, es, bs, self.cur_cmd)
+        elif oe:
+            self.do_output_enable(ss, es, bs, self.cur_cmd)
+        elif pagel:
+            self.putwarn(ss, es, "TODO: PAGEL")
         else:
-            self.putwarn(ss, es, "TODO: XA=3")
+            self.putwarn(ss, es, "TODO: Idle")
 
     def sci_rise(self, pins, samplenum, bitnum):
         # SII / SDI are clocked on rising edge

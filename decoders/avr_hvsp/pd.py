@@ -43,7 +43,7 @@ COMMANDS = {
 }
 
 (ann_sii_bits, ann_sdi_bits, ann_sdo_bits, ann_sii, ann_sdi, ann_sdo,
-    ann_instr, ann_warn) = range(8)
+    ann_instr, ann_data, ann_warn) = range(9)
 
 class Decoder(srd.Decoder):
     api_version = 2
@@ -68,6 +68,7 @@ class Decoder(srd.Decoder):
         ('sdi', 'SDI'),
         ('sdo', 'SDO'),
         ('instr', 'Instructions'),
+        ('data', 'Data'),
         ('warnings', 'Warnings'),
     )
     annotation_rows = (
@@ -78,6 +79,7 @@ class Decoder(srd.Decoder):
         ('sdi', 'SDI', (ann_sdi,)),
         ('sdo', 'SDO', (ann_sdo,)),
         ('instr', 'Instructions', (ann_instr,)),
+        ('data', 'Data', (ann_data,)),
         ('warnings', 'Warnings', (ann_warn,)),
     )
 
@@ -108,6 +110,9 @@ class Decoder(srd.Decoder):
 
     def puti(self, ss, es, val):
         self.put(ss, es, self.out_ann, [ann_instr, [val]])
+
+    def putread(self, ss, es, desc, val):
+        self.put(ss, es, self.out_ann, [ann_data, ['%s: %02X' % (desc, val)]])
 
     def putwarn(self, ss, es, warning):
         self.put(ss, es, self.out_ann, [ann_warn, [warning]])
@@ -147,6 +152,7 @@ class Decoder(srd.Decoder):
             return
 
         self.puti(ss, es, inst)
+        self.cur_inst = inst
 
     def do_output_enable(self, ss, es, bs, cmd):
         # BS and CMD together suggest what the read command is
@@ -156,6 +162,33 @@ class Decoder(srd.Decoder):
             return
 
         self.puti(ss, es, inst)
+
+    def do_was_output_enable(self, ss, es):
+        inst = self.cur_inst
+
+        if inst == 'RSIG':
+            desc = 'SIG[%d]' % self.cur_addr
+        elif inst == 'ROSC':
+            desc = 'OSC'
+        elif inst == 'RFU0':
+            desc = 'LFUSE'
+        elif inst == 'RFU1':
+            desc = 'HFUSE'
+        elif inst == 'RFU2':
+            desc = 'EFUSE'
+        elif inst == 'RLOCK':
+            desc = 'LOCK'
+        elif inst == 'RLB':
+            desc = 'FLASH[%04X].l' % self.cur_addr
+        elif inst == 'RHB':
+            desc = 'FLASH[%04X].h' % self.cur_addr
+        elif inst == 'REEP':
+            desc = 'EEPROM[%04X]' % self.cur_addr
+        else:
+            self.putwarn(ss, es, 'Invalid OE')
+            return
+
+        self.putread(ss, es, desc, self.sdo_word)
 
     def do_word(self, ss, es, sii, sdi):
         # The SII bits map to hardware control lines in an interesting manner
@@ -199,15 +232,23 @@ class Decoder(srd.Decoder):
                 self.putwarn(ss, es, "Invalid BS")
             else:
                 self.do_load_command(ss, es, sdi)
-        # else xa==3
+        # else xa==3 - decode wr/oe/pagel bits
         elif wr:
             self.do_write_enable(ss, es, bs, self.cur_cmd)
         elif oe:
             self.do_output_enable(ss, es, bs, self.cur_cmd)
         elif pagel:
             self.putwarn(ss, es, "TODO: PAGEL")
+        # else idle - are we just after wr/oe phase?
+        elif self.was_wr:
+            self.putwarn(ss, es, "TODO: WAS WR")
+        elif self.was_oe:
+            self.do_was_output_enable(self.was_ss, es)
         else:
             self.putwarn(ss, es, "TODO: Idle")
+
+        self.was_ss = ss
+        self.was_wr, self.was_oe, self.was_pagel = wr, oe, pagel
 
     def sci_rise(self, pins, samplenum, bitnum):
         # SII / SDI are clocked on rising edge
